@@ -1,0 +1,10 @@
+{
+  "principal": "alice",
+  "agent": "travel-agent",
+  "chain": ["alice", "travel-agent"],
+  "tool": "flight.book",
+  "amount": 450,
+  "currency": "USD",
+  "merchant": "kayak.com",
+  "dataClasses": ["itinerary", "price"]
+}

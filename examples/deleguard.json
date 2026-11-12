@@ -1,0 +1,47 @@
+{
+  "agents": [
+    {
+      "id": "travel-agent",
+      "version": "1.4.0"
+    },
+    {
+      "id": "sub-agent",
+      "version": "0.9.0"
+    }
+  ],
+  "defaultDecision": "deny",
+  "delegations": [
+    {
+      "currency": "USD",
+      "dataClasses": [
+        "itinerary",
+        "price"
+      ],
+      "expiresAt": "2026-12-31T23:59:59Z",
+      "from": "alice",
+      "id": "del-1",
+      "maxAmount": 500,
+      "maxDepth": 1,
+      "merchants": [
+        "united.com"
+      ],
+      "notBefore": "2026-11-01T00:00:00Z",
+      "requireApprovalAbove": 0,
+      "to": "travel-agent",
+      "tools": [
+        "flight.search",
+        "flight.book"
+      ]
+    }
+  ],
+  "deniedTools": [
+    "flight.cancel"
+  ],
+  "principals": [
+    {
+      "displayName": "Alice",
+      "id": "alice"
+    }
+  ],
+  "version": 1
+}

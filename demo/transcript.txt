@@ -1,0 +1,151 @@
+# deleguard demo - real CLI output on the SYNTHETIC United travel fixture
+# (Alice, $500 limit on united.com, $450 / $900 amounts are invented;
+#  see examples/README.md for provenance. Approval issued at 2026-11-12T07:17:16Z.)
+
+$ deleguard init
+deleguard.json + 6 example actions written (see above)
+
+$ deleguard check --policy deleguard.json --action examples/actions/search.json
+deleguard check - flight.search
+
+Rule               Result  Detail
+------------------------------------------------------------------------
+DENIED_TOOL        PASS    tool flight.search is not denied
+CHAIN              PASS    every hop has a grant (alice -> travel-agent)
+CHAIN_DEPTH        PASS    chain depth 1 fits every grant's maxDepth
+CHAIN_SUBSET       PASS    single-hop chain, nothing to subset
+TOOL_ALLOWED       PASS    tool flight.search is granted on every hop
+TIME_WINDOW        PASS    evaluation time is inside every grant window
+AMOUNT             PASS    no amount on a non-money tool
+MERCHANT           PASS    merchant united.com is allowlisted on every hop
+DATA_CLASSES       PASS    data classes fit every grant
+APPROVAL_REQUIRED  PASS    no approval threshold exceeded
+------------------------------------------------------------------------
+VERDICT ALLOW (policy e1b4be1df043, action b88fcb06d15b)
+
+$ deleguard check --policy deleguard.json --action examples/actions/book.json
+deleguard check - flight.book
+
+Rule               Result  Detail
+------------------------------------------------------------------------
+DENIED_TOOL        PASS    tool flight.book is not denied
+CHAIN              PASS    every hop has a grant (alice -> travel-agent)
+CHAIN_DEPTH        PASS    chain depth 1 fits every grant's maxDepth
+CHAIN_SUBSET       PASS    single-hop chain, nothing to subset
+TOOL_ALLOWED       PASS    tool flight.book is granted on every hop
+TIME_WINDOW        PASS    evaluation time is inside every grant window
+AMOUNT             PASS    amount 450 USD fits every grant limit
+MERCHANT           PASS    merchant united.com is allowlisted on every hop
+DATA_CLASSES       PASS    data classes fit every grant
+APPROVAL_REQUIRED  FAIL    amount 450 USD needs a human approval (threshold exceeded)
+------------------------------------------------------------------------
+VERDICT NEEDS-APPROVAL (policy e1b4be1df043, action 085059926c65)
+exit: 2
+
+$ deleguard approve --policy deleguard.json --action examples/actions/book.json --by alice --out examples/approvals/appr-1.json
+approval appr-76eff5891257 written to examples/approvals/appr-1.json
+approval appr-76eff5891257 for flight.book (450 USD) - expires 2026-11-12T07:32:16.843Z
+
+$ deleguard check --policy deleguard.json --action examples/actions/book.json --approval examples/approvals/appr-1.json --log deleguard-audit.jsonl
+deleguard check - flight.book
+
+Rule               Result  Detail
+------------------------------------------------------------------------
+DENIED_TOOL        PASS    tool flight.book is not denied
+CHAIN              PASS    every hop has a grant (alice -> travel-agent)
+CHAIN_DEPTH        PASS    chain depth 1 fits every grant's maxDepth
+CHAIN_SUBSET       PASS    single-hop chain, nothing to subset
+TOOL_ALLOWED       PASS    tool flight.book is granted on every hop
+TIME_WINDOW        PASS    evaluation time is inside every grant window
+AMOUNT             PASS    amount 450 USD fits every grant limit
+MERCHANT           PASS    merchant united.com is allowlisted on every hop
+DATA_CLASSES       PASS    data classes fit every grant
+APPROVAL_VALID     PASS    approval appr-76eff5891257 matches this exact action and is...
+------------------------------------------------------------------------
+VERDICT ALLOW (policy e1b4be1df043, action 085059926c65)
+
+$ deleguard check --policy deleguard.json --action examples/actions/book-over-limit.json
+deleguard check - flight.book
+
+Rule               Result  Detail
+------------------------------------------------------------------------
+DENIED_TOOL        PASS    tool flight.book is not denied
+CHAIN              PASS    every hop has a grant (alice -> travel-agent)
+CHAIN_DEPTH        PASS    chain depth 1 fits every grant's maxDepth
+CHAIN_SUBSET       PASS    single-hop chain, nothing to subset
+TOOL_ALLOWED       PASS    tool flight.book is granted on every hop
+TIME_WINDOW        PASS    evaluation time is inside every grant window
+AMOUNT             FAIL    amount 900 USD exceeds maxAmount 500 USD of del-1
+MERCHANT           PASS    merchant united.com is allowlisted on every hop
+DATA_CLASSES       PASS    data classes fit every grant
+APPROVAL_REQUIRED  FAIL    amount 900 USD needs a human approval (threshold exceeded)
+------------------------------------------------------------------------
+VERDICT DENY (policy e1b4be1df043, action 91971f65c825)
+exit: 1
+
+$ deleguard check --policy deleguard.json --action examples/actions/book-aggregator.json
+deleguard check - flight.book
+
+Rule               Result  Detail
+------------------------------------------------------------------------
+DENIED_TOOL        PASS    tool flight.book is not denied
+CHAIN              PASS    every hop has a grant (alice -> travel-agent)
+CHAIN_DEPTH        PASS    chain depth 1 fits every grant's maxDepth
+CHAIN_SUBSET       PASS    single-hop chain, nothing to subset
+TOOL_ALLOWED       PASS    tool flight.book is granted on every hop
+TIME_WINDOW        PASS    evaluation time is inside every grant window
+AMOUNT             PASS    amount 450 USD fits every grant limit
+MERCHANT           FAIL    merchant kayak.com is not on the allowlist of del-1
+DATA_CLASSES       PASS    data classes fit every grant
+APPROVAL_REQUIRED  FAIL    amount 450 USD needs a human approval (threshold exceeded)
+------------------------------------------------------------------------
+VERDICT DENY (policy e1b4be1df043, action 30310630e7cf)
+exit: 1
+
+$ deleguard check --policy deleguard.json --action examples/actions/sub-agent-no-grant.json
+deleguard check - flight.book
+
+Rule               Result  Detail
+------------------------------------------------------------------------
+DENIED_TOOL        PASS    tool flight.book is not denied
+CHAIN              FAIL    no delegation grant from travel-agent to sub-agent
+CHAIN_DEPTH        FAIL    chain depth 2 exceeds maxDepth 1 of del-1
+CHAIN_SUBSET       PASS    subset check skipped - the chain has no complete grant set
+TOOL_ALLOWED       PASS    tool flight.book is granted on every hop
+TIME_WINDOW        PASS    evaluation time is inside every grant window
+AMOUNT             PASS    amount 200 USD fits every grant limit
+MERCHANT           PASS    merchant united.com is allowlisted on every hop
+DATA_CLASSES       PASS    data classes fit every grant
+APPROVAL_REQUIRED  FAIL    amount 200 USD needs a human approval (threshold exceeded)
+------------------------------------------------------------------------
+VERDICT DENY (policy e1b4be1df043, action 8794235b560d)
+exit: 1
+
+$ deleguard check --policy deleguard.json --action examples/actions/expired-approval.json --approval examples/approvals/appr-1.json --at 2026-11-12T09:17:16Z
+deleguard check - flight.book
+
+Rule               Result  Detail
+------------------------------------------------------------------------
+DENIED_TOOL        PASS    tool flight.book is not denied
+CHAIN              PASS    every hop has a grant (alice -> travel-agent)
+CHAIN_DEPTH        PASS    chain depth 1 fits every grant's maxDepth
+CHAIN_SUBSET       PASS    single-hop chain, nothing to subset
+TOOL_ALLOWED       PASS    tool flight.book is granted on every hop
+TIME_WINDOW        PASS    evaluation time is inside every grant window
+AMOUNT             PASS    amount 450 USD fits every grant limit
+MERCHANT           PASS    merchant united.com is allowlisted on every hop
+DATA_CLASSES       PASS    data classes fit every grant
+APPROVAL_VALID     FAIL    approval expired at 2026-11-12T07:32:16.843Z
+------------------------------------------------------------------------
+VERDICT DENY (policy e1b4be1df043, action 085059926c65)
+exit: 1
+
+$ deleguard audit --log deleguard-audit.jsonl
+Seq  Time                 Principal  Agent         Tool           Verdict
+------------------------------------------------------------------------
+1     2026-11-12T07:17:17.023Z alice      travel-agent  flight.book    ALLOW
+------------------------------------------------------------------------
+1 decision(s) in deleguard-audit.jsonl
+
+$ deleguard verify --log deleguard-audit.jsonl
+verify OK: 1 record(s), hash chain intact, no gaps, no secret-looking values.

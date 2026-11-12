@@ -1,0 +1,10 @@
+{
+  "principal": "alice",
+  "agent": "sub-agent",
+  "chain": ["alice", "travel-agent", "sub-agent"],
+  "tool": "flight.book",
+  "amount": 200,
+  "currency": "USD",
+  "merchant": "united.com",
+  "dataClasses": ["itinerary", "price"]
+}

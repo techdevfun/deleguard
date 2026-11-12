@@ -1,0 +1,8 @@
+{
+  "principal": "alice",
+  "agent": "travel-agent",
+  "chain": ["alice", "travel-agent"],
+  "tool": "flight.search",
+  "merchant": "united.com",
+  "dataClasses": ["itinerary", "price"]
+}

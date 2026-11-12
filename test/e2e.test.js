@@ -82,6 +82,102 @@ test("full flow: init -> search ALLOW -> book NEEDS-APPROVAL -> approve -> book 
   assert.match(verify.stdout, /verify OK/);
 });
 
+test("hook gates a real action: blocked without approval, runs with one, blocked on reuse", () => {
+  const dir = setup();
+  const pol = join(dir, "deleguard.json");
+  const act = (n) => join(dir, "examples", "actions", n);
+  const hook = new URL("../examples/hook/pre-tool-call.sh", import.meta.url).pathname;
+  const log = join(dir, "deleguard-audit.jsonl");
+  const booking = join(dir, "booking.txt");
+  const gated = [
+    "node",
+    "-e",
+    "require('node:fs').writeFileSync('booking.txt', 'BOOKED\\n')",
+  ];
+  const env = { ...process.env, DELEGUARD_BIN: CLI };
+  const gate = (actionFile, extra) =>
+    spawnSync(
+      "bash",
+      [hook, "--policy", pol, "--action", actionFile, ...extra, "--", ...gated],
+      { cwd: dir, encoding: "utf8", env },
+    );
+
+  // Attempt 1: no approval -> NEEDS-APPROVAL (exit 2), the file is NOT written.
+  const blocked = gate(act("book.json"), []);
+  assert.equal(blocked.status, 2, blocked.stdout + blocked.stderr);
+  assert.equal(existsSync(booking), false);
+
+  // Approve, then attempt 2: ALLOW (exit 0), the file IS written.
+  const apprOut = join(dir, "examples", "approvals", "appr-1.json");
+  const approve = run(
+    ["approve", "--policy", pol, "--action", act("book.json"), "--by", "alice", "--out", apprOut],
+    dir,
+  );
+  assert.equal(approve.status, 0, approve.stdout + approve.stderr);
+  const allowed = gate(act("book.json"), ["--approval", apprOut, "--log", log]);
+  assert.equal(allowed.status, 0, allowed.stdout + allowed.stderr);
+  assert.equal(readFileSync(booking, "utf8"), "BOOKED\n");
+
+  // Attempt 3: the same approval reused -> DENY (exit 1), file unchanged.
+  const reuse = gate(act("book.json"), ["--approval", apprOut, "--log", log]);
+  assert.equal(reuse.status, 1, reuse.stdout + reuse.stderr);
+  assert.equal(readFileSync(booking, "utf8"), "BOOKED\n");
+
+  // A DENY action never runs the gated command either (exit 1).
+  const deny = gate(act("book-over-limit.json"), []);
+  assert.equal(deny.status, 1, deny.stdout + deny.stderr);
+  assert.equal(readFileSync(booking, "utf8"), "BOOKED\n");
+});
+
+test("check --approval without --log warns on stderr but keeps ALLOW", () => {
+  const dir = setup();
+  const pol = join(dir, "deleguard.json");
+  const act = join(dir, "examples", "actions", "book.json");
+  const apprOut = join(dir, "examples", "approvals", "appr-1.json");
+  const approve = run(
+    ["approve", "--policy", pol, "--action", act, "--by", "alice", "--out", apprOut],
+    dir,
+  );
+  assert.equal(approve.status, 0, approve.stderr);
+
+  // No --log: ALLOW, with a stderr warning that single-use is unchecked.
+  const first = run(["check", "--policy", pol, "--action", act, "--approval", apprOut], dir);
+  assert.equal(first.status, 0, first.stdout + first.stderr);
+  assert.match(first.stdout, /VERDICT ALLOW/);
+  assert.match(first.stderr, /single-use cannot be checked/);
+  assert.match(first.stderr, /may be replayed/);
+
+  // The warning stays on stderr with --format json, so stdout stays pure JSON.
+  const j = run(
+    ["check", "--policy", pol, "--action", act, "--approval", apprOut, "--format", "json"],
+    dir,
+  );
+  assert.equal(j.status, 0, j.stderr);
+  assert.equal(JSON.parse(j.stdout).verdict, "ALLOW");
+  assert.match(j.stderr, /single-use cannot be checked/);
+
+  // Same approval again, still no --log: ALLOW again (warning, not a verdict change).
+  const second = run(["check", "--policy", pol, "--action", act, "--approval", apprOut], dir);
+  assert.equal(second.status, 0, second.stdout + second.stderr);
+  assert.match(second.stderr, /may be replayed/);
+
+  // With --log, the first logged use is ALLOW with no warning, and the
+  // reuse is DENY (single-use enforced by the log).
+  const log = join(dir, "deleguard-audit.jsonl");
+  const withLog = run(
+    ["check", "--policy", pol, "--action", act, "--approval", apprOut, "--log", log],
+    dir,
+  );
+  assert.equal(withLog.status, 0, withLog.stdout + withLog.stderr);
+  assert.doesNotMatch(withLog.stderr, /single-use cannot be checked/);
+  const reuse = run(
+    ["check", "--policy", pol, "--action", act, "--approval", apprOut, "--log", log],
+    dir,
+  );
+  assert.equal(reuse.status, 1, reuse.stdout);
+  assert.match(reuse.stdout, /already used/);
+});
+
 test("demo denials: over-limit, aggregator, sub-agent (exit 1 each)", () => {
   const dir = setup();
   const pol = join(dir, "deleguard.json");

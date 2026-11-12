@@ -1,6 +1,6 @@
 # deleguard demo - real CLI output on the SYNTHETIC United travel fixture
 # (Alice, $500 limit on united.com, $450 / $900 amounts are invented;
-#  see examples/README.md for provenance. Approval issued at 2026-11-12T07:17:16Z.)
+#  see examples/README.md for provenance. Approval issued at 2026-11-12T12:09:59Z.)
 
 $ deleguard init
 deleguard.json + 6 example actions written (see above)
@@ -43,8 +43,8 @@ VERDICT NEEDS-APPROVAL (policy e1b4be1df043, action 085059926c65)
 exit: 2
 
 $ deleguard approve --policy deleguard.json --action examples/actions/book.json --by alice --out examples/approvals/appr-1.json
-approval appr-76eff5891257 written to examples/approvals/appr-1.json
-approval appr-76eff5891257 for flight.book (450 USD) - expires 2026-11-12T07:32:16.843Z
+approval appr-de2c72515116 written to examples/approvals/appr-1.json
+approval appr-de2c72515116 for flight.book (450 USD) - expires 2026-11-12T12:24:59.510Z
 
 $ deleguard check --policy deleguard.json --action examples/actions/book.json --approval examples/approvals/appr-1.json --log deleguard-audit.jsonl
 deleguard check - flight.book
@@ -60,7 +60,7 @@ TIME_WINDOW        PASS    evaluation time is inside every grant window
 AMOUNT             PASS    amount 450 USD fits every grant limit
 MERCHANT           PASS    merchant united.com is allowlisted on every hop
 DATA_CLASSES       PASS    data classes fit every grant
-APPROVAL_VALID     PASS    approval appr-76eff5891257 matches this exact action and is...
+APPROVAL_VALID     PASS    approval appr-de2c72515116 matches this exact action and is unexpired
 ------------------------------------------------------------------------
 VERDICT ALLOW (policy e1b4be1df043, action 085059926c65)
 
@@ -121,7 +121,9 @@ APPROVAL_REQUIRED  FAIL    amount 200 USD needs a human approval (threshold exce
 VERDICT DENY (policy e1b4be1df043, action 8794235b560d)
 exit: 1
 
-$ deleguard check --policy deleguard.json --action examples/actions/expired-approval.json --approval examples/approvals/appr-1.json --at 2026-11-12T09:17:16Z
+$ deleguard check --policy deleguard.json --action examples/actions/expired-approval.json --approval examples/approvals/appr-1.json --at 2026-11-12T14:09:59Z
+warning: --approval used without --log, so single-use cannot be checked.
+warning: this approval may be replayed; pass --log <file> to enforce single-use.
 deleguard check - flight.book
 
 Rule               Result  Detail
@@ -135,7 +137,7 @@ TIME_WINDOW        PASS    evaluation time is inside every grant window
 AMOUNT             PASS    amount 450 USD fits every grant limit
 MERCHANT           PASS    merchant united.com is allowlisted on every hop
 DATA_CLASSES       PASS    data classes fit every grant
-APPROVAL_VALID     FAIL    approval expired at 2026-11-12T07:32:16.843Z
+APPROVAL_VALID     FAIL    approval expired at 2026-11-12T12:24:59.510Z
 ------------------------------------------------------------------------
 VERDICT DENY (policy e1b4be1df043, action 085059926c65)
 exit: 1
@@ -143,7 +145,7 @@ exit: 1
 $ deleguard audit --log deleguard-audit.jsonl
 Seq  Time                 Principal  Agent         Tool           Verdict
 ------------------------------------------------------------------------
-1     2026-11-12T07:17:17.023Z alice      travel-agent  flight.book    ALLOW
+1     2026-11-12T12:09:59.650Z alice      travel-agent  flight.book    ALLOW
 ------------------------------------------------------------------------
 1 decision(s) in deleguard-audit.jsonl
 

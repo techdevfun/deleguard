@@ -21,6 +21,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      # dist/ is committed (so `npm test` works right after clone) and
+      # must match a fresh `tsc` build exactly: a stale dist/ fails CI.
+      - run: git diff --exit-code -- dist/
+        name: committed dist matches a fresh build
       - run: npm test
       - run: node scripts/preflight.js
         name: preflight (Rule 7 - ASCII-only + no-internal-names scan)

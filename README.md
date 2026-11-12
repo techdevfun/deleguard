@@ -2,13 +2,17 @@
 
 A pre-execution authorization gate for agent actions. For platform and security engineers who let an AI agent propose actions that touch money or customer data. It answers one question, deterministically, before the action runs: is this exact action delegated, in scope, within limits, and approved?
 
-An agent can technically book a flight, but having the capability is not having the authority. On 11 November 2026 United Airlines said it will bar unauthorized third-party AI agents from booking, changing, or buying tickets through its site, app, travel agencies, and aggregators, citing personal-data risk, transactions against the customer's intent, and federal-rule risk (for example an agent checking in luggage without the passenger confirming it holds no prohibited items). Agents may still show flights and prices, and bookings made before 11 November 2026 are not cancelled (CBS News, 11 November 2026; Skift, 11 November 2026; PhocusWire, 11 November 2026). United is, per Skift, the first large US carrier to say this explicitly. deleguard is the small tool that answers the authorization question on your side of that boundary, before the action runs. It does not help bypass any vendor's rules: it helps a principal enforce their own policy, and helps an operator respect a vendor's.
+On 11 November 2026 United Airlines said it will bar unauthorized third-party AI agents from booking, changing, or buying tickets (CBS News; Skift; PhocusWire, 11 November 2026). deleguard answers the authorization question on your side of that boundary, before the action runs. It does not help bypass any vendor's rules: it helps a principal enforce their own policy, and helps an operator respect a vendor's.
 
 ## Demo
 
 ![deleguard demo](demo/deleguard-demo.gif)
 
 The demo runs the real CLI on the synthetic United travel fixture (see `examples/README.md`): search ALLOW, book NEEDS-APPROVAL, approve, book ALLOW, $900 over the $500 limit DENY, aggregator DENY, sub-agent DENY, expired approval DENY, then audit + verify OK. Full output: [demo/transcript.txt](demo/transcript.txt).
+
+## Why now
+
+An agent can technically book a flight, but having the capability is not having the authority. United's stated reasons are personal-data risk, transactions against the customer's intent, and federal-rule risk (for example an agent checking in luggage without the passenger confirming it holds no prohibited items). Agents may still show flights and prices, and bookings made before 11 November 2026 are not cancelled. United is, per Skift, the first large US carrier to say this explicitly.
 
 ## Install (from source)
 
@@ -57,6 +61,38 @@ deleguard verify --log deleguard-audit.jsonl
 Golden path (init to a verified audit log) takes under 10 minutes.
 A clean install from source (npm install + build, no cache) was timed
 at 5 seconds on this machine.
+
+## Pre-tool-call hook: gate a real action
+
+`check` answers; the hook in `examples/hook/` enforces the answer
+for a scripted agent. It runs a real command ONLY on ALLOW (exit 0):
+
+```sh
+bash examples/hook/run-agent.sh
+# attempt 1, no approval: NEEDS-APPROVAL blocks the booking write
+# human approves the exact action; attempt 2: ALLOW writes the file
+# attempt 3, same approval reused: DENY (single-use) blocks the write
+```
+
+Or gate any command directly:
+
+```sh
+bash examples/hook/pre-tool-call.sh --policy deleguard.json \
+  --action examples/actions/book.json \
+  --approval examples/approvals/appr-1.json --log deleguard-audit.jsonl \
+  -- ./book-flight.sh
+# ALLOW -> ./book-flight.sh runs; DENY or NEEDS-APPROVAL -> it never runs.
+```
+
+Time to first gated action, measured on this machine on
+12 November 2026: about 5 seconds of command time from a source
+checkout (`npm install` + build 4.0 s, hook demo 0.9 s), excluding
+the time to read the docs. Agent_Sudo documents its own evaluation
+path as 5 minutes and tenuo documents its Python quickstart as
+5 minutes; we did not re-time their paths ourselves. deleguard is
+faster to a first gated action because it does less: no crypto, no
+enforcement at a tool boundary, no MCP server. Details and the honest
+trade are in [examples/hook/README.md](examples/hook/README.md).
 
 ## Worked example
 
@@ -143,7 +179,7 @@ startup on top of that; the decision itself is sub-millisecond.
 | Command | What it does |
 | --- | --- |
 | `deleguard init [--dir <dir>]` | Scaffold `deleguard.json` + 6 example actions. Refuses to overwrite. |
-| `deleguard check --policy <f> --action <f> [--approval <f>] [--at <ISO>] [--format table\|json] [--log <f>]` | Answer ALLOW (0), DENY (1), or NEEDS-APPROVAL (2). `--log` appends the decision to an audit log (explicit path only; no silent writes). |
+| `deleguard check --policy <f> --action <f> [--approval <f>] [--at <ISO>] [--format table\|json] [--log <f>]` | Answer ALLOW (0), DENY (1), or NEEDS-APPROVAL (2). `--log` appends the decision to an audit log (explicit path only; no silent writes). Using `--approval` without `--log` prints a stderr warning that single-use cannot be checked. |
 | `deleguard approve --policy <f> --action <f> --by <human> [--expires-minutes N] [--out <f>]` | Issue an approval bound to the exact action. Default expiry 15 minutes. Refuses a DENY action. |
 | `deleguard explain --policy <f> --action <f> [--approval <f>]` | Per-rule trace for one action. Exit 0. |
 | `deleguard audit --log <f> [--format table\|json]` | List decisions. Exit 0. |
@@ -163,7 +199,7 @@ deleguard's edge is the combination: delegation-first, multi-hop, local, human-r
 
 - **Identity is a trust assumption, not a feature.** deleguard trusts the caller-supplied principal and agent names. It does not authenticate anyone, and it cannot stop a harness that ignores its verdict or lies about who is calling. The harness must bind identity before calling deleguard.
 - **It decides; it does not enforce.** There is no interception, proxy, sandbox, or credential brokering. A verdict is only as strong as the harness that respects it.
-- **Single-use approvals rely on the audit log.** Reuse is detected by scanning the log file passed with `--log` at check time. If the operator deletes the log, reuse becomes possible; `verify` reports the sequence gap, and the log must be kept append-only. Without `--log`, reuse cannot be checked at all.
+- **Single-use approvals rely on the audit log.** Reuse is detected by scanning the log file passed with `--log` at check time. If the operator deletes the log, reuse becomes possible; `verify` reports the sequence gap, and the log must be kept append-only. Without `--log`, reuse cannot be checked at all: `check` then prints a stderr warning when `--approval` is used without `--log`, and the verdict is unchanged (ALLOW stays ALLOW).
 - **The audit chain is tamper-evidence, not tamper-proof.** The log is a local file. Anyone who can rewrite the whole file can rebuild the chain. Keep it append-only and check it with `verify`.
 - **No bypass, ever.** deleguard is a compliance tool: it helps a principal enforce their own policy and helps an operator respect a vendor's rules. It has no scraping, no browser automation, and no feature that works around a vendor's ban or terms of service.
 - **JSON policy, not Cedar/Rego.** The policy language covers the delegation shape (chain, scope, limits, approvals). General authorization with symbolic analysis belongs in Cedar or OPA, linked above.

@@ -130,8 +130,9 @@ function renderCheckTable(ev: Evaluation, actionTool: string): string {
   lines.push("Rule               Result  Detail");
   lines.push("------------------------------------------------------------------------");
   for (const r of ev.reasons) {
-    const detail = r.message.length > 62 ? r.message.slice(0, 59) + "..." : r.message;
-    lines.push(`${r.rule.padEnd(18)} ${(r.pass ? "PASS" : "FAIL").padEnd(7)} ${detail}`);
+    // No truncation: the full rule message must render (the APPROVAL_VALID
+    // line is the headline proof of exact-action binding).
+    lines.push(`${r.rule.padEnd(18)} ${(r.pass ? "PASS" : "FAIL").padEnd(7)} ${r.message}`);
   }
   lines.push("------------------------------------------------------------------------");
   lines.push(`VERDICT ${ev.verdict} (policy ${ev.policyHash.slice(0, 12)}, action ${ev.actionDigest.slice(0, 12)})`);
@@ -207,6 +208,18 @@ function cmdCheck(flags: Flags): number {
     at,
   });
   const format = flagStr(flags, "format") ?? "table";
+  if (approval && !logPath) {
+    // Single-use is enforced by scanning the audit log at check time.
+    // Without --log it cannot be checked, so warn loudly on stderr
+    // (stdout stays clean for --format json). The verdict is unchanged:
+    // ALLOW stays ALLOW; the operator is told the approval may replay.
+    console.error(
+      "warning: --approval used without --log, so single-use cannot be checked.",
+    );
+    console.error(
+      "warning: this approval may be replayed; pass --log <file> to enforce single-use.",
+    );
+  }
   if (format === "json") console.log(renderCheckJson(ev));
   else console.log(renderCheckTable(ev, action.tool));
   if (logPath) {
